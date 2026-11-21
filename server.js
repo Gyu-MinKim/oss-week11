@@ -17,11 +17,19 @@ import { toDays } from './public/logic.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
+
+if(!process.env.ADMIN_TOKEN){
+    console.error("ADMIN_TOKEN is not set. Copy .env.example to .env.");
+    process.exit(1);
+}
+
 const CITIES = {
   seoul: { name: "Seoul", lat: 37.566, lon: 126.9784 },
   daejeon: { name: "Daejeon", lat: 36.3504, lon: 127.3845 },
   gangneung: { name: "Gangneung", lat: 37.7519, lon: 128.8761 },
 };
+
+const counts = {};
 
 // Serve static files from public/
 app.use(express.static('public'));
@@ -38,6 +46,8 @@ app.get('/api/forecast', async (req, res) => {
     if (!Object.hasOwn(CITIES, cityKey)) {
         return res.status(400).json({ error: `Unknown city: ${req.query.city}`});
     }
+    // Count valid city requests
+    counts[cityKey] = (counts[cityKey] ?? 0) + 1;
     const city = CITIES[cityKey];
     try {
         const daily = await getDaily({lat: city.lat, lon: city.lon});
@@ -47,6 +57,18 @@ app.get('/api/forecast', async (req, res) => {
     catch (err) {
         res.status(502).json({ error: err.message });
     }
+});
+
+app.get('/api/stats', (req, res) => {
+    const token = req.get("Authorization");
+
+    if (token !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({
+            error: "Unauthorized"
+        });
+    }
+
+    res.status(200).json(counts);
 });
 
 // Start the server
